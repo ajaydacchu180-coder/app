@@ -1,0 +1,50 @@
+# Netlify Configuration for Flutter Web App
+
+[build]
+  # Build command - Flutter web build
+  command = "flutter build web --release"
+  
+  # Directory to deploy (Flutter web output)
+  publish = "build/web"
+  
+  # Base directory
+  base = "."
+
+# Redirects and rewrites for Flutter routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
+  
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer-when-downgrade"
+    
+# Cache static assets
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    
+[[headers]]
+  for = "/*.woff2"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Environment detection (optional)
+[context.production.environment]
+  FLUTTER_WEB_USE_SKIA = "true"
+  
+[context.deploy-preview.environment]
+  FLUTTER_WEB_USE_SKIA = "true"

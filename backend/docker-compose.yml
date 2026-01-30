@@ -1,0 +1,41 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: companydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/companydb?schema=public
+      JWT_ACCESS_SECRET: change-this-in-prod
+      JWT_REFRESH_SECRET: change-this-in-prod
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+  worker:
+    build: .
+    command: node dist/worker.js
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/companydb?schema=public
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    restart: on-failure
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+volumes:
+  db-data:
+  redis-data:
