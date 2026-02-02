@@ -1,0 +1,221 @@
+name: Release Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: 3.16.0
+
+jobs:
+  analyze:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run analyzer
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+  build-android:
+    name: Build Android Release AAB
+    runs-on: ubuntu-latest
+    needs: analyze
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Create Android signing key
+        run: |
+          mkdir -p android
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release-keystore.jks
+
+      - name: Create key.properties
+        run: |
+          cat > android/key.properties << EOF
+          storeFile=release-keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Build AAB (Android App Bundle)
+        run: flutter build appbundle --release
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload AAB to GitHub Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.aab
+          path: build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload APK to GitHub Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  build-ios:
+    name: Build iOS Release
+    runs-on: macos-latest
+    needs: analyze
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build iOS
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Create iOS App
+        run: |
+          # This step requires App Store provisioning setup via Xcode
+          # For now, we'll build without signing; CI/CD should configure signing via Xcode Cloud or similar
+          echo "iOS build archive created. Configure signing in Xcode Cloud or local signing."
+
+      - name: Upload iOS build to GitHub Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-release-build
+          path: build/ios/iphoneos/Runner.app
+
+  build-web:
+    name: Build Web Release
+    runs-on: ubuntu-latest
+    needs: analyze
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Web
+        run: flutter build web --release
+
+      - name: Upload Web build to GitHub Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: web-release-build
+          path: build/web
+
+  upload-to-play-store:
+    name: Upload Android AAB to Google Play Store (Internal Testing)
+    runs-on: ubuntu-latest
+    needs: build-android
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: app-release.aab
+
+      - name: Setup authentication for Play Store
+        run: |
+          # Requires: PLAY_STORE_JSON_KEY secret (service account JSON)
+          echo "${{ secrets.PLAY_STORE_JSON_KEY }}" > $HOME/play-store-key.json
+
+      - name: Upload to Play Store (Internal)
+        uses: r0adkll/upload-google-play@v1.1.1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          packageName: com.example.enterprise_attendance
+          releaseFiles: app-release.aab
+          track: internal
+          status: draft
+          changesNotSentForReview: true
+
+  upload-to-testflight:
+    name: Upload iOS Build to TestFlight (Beta)
+    runs-on: macos-latest
+    needs: build-ios
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        run: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build iOS Archive
+        run: |
+          flutter build ios --release
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -derivedDataPath build/ios_build \
+            -archivePath build/ios_build/Runner.xcarchive \
+            archive
+
+      - name: Export IPA
+        run: |
+          cd ios
+          xcodebuild -exportArchive \
+            -archivePath build/ios_build/Runner.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ios_build/ipa
+
+      - name: Upload to TestFlight
+        uses: Apple-Actions/upload-testflight-build@v1
+        with:
+          app-path: ios/build/ios_build/ipa/Runner.ipa
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}

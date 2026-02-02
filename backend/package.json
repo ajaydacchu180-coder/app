@@ -1,0 +1,43 @@
+{
+  "name": "enterprise-productivity-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start:dev": "ts-node-dev --poll --respawn --transpile-only src/main.ts",
+    "start:worker": "node dist/worker.js",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@bull-board/api": "^4.0.0",
+    "@bull-board/express": "^4.0.0",
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/config": "^3.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/jwt": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/swagger": "^11.2.5",
+    "@nestjs/websockets": "^10.0.0",
+    "@prisma/client": "4.14.0",
+    "bcrypt": "^5.1.0",
+    "bullmq": "^1.80.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.0",
+    "cookie": "^0.6.0",
+    "helmet": "^7.0.0",
+    "ioredis": "^5.3.2",
+    "socket.io": "^4.8.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.0",
+    "@types/cookie": "^0.5.1",
+    "@types/express": "^5.0.6",
+    "prisma": "4.14.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.1.6"
+  }
+}

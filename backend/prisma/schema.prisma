@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Roles
+model Role {
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  users User[]
+}
+
+// Users & Auth
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  roleId        Int
+  role          Role      @relation(fields: [roleId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  refreshTokens RefreshToken[]
+  sessions      AttendanceSession[]
+  workSessions  WorkSession[]
+  presences     UserPresence[]
+  // Back-relations
+  projectMembers ProjectMember[]
+  assignedTasks  Task[]
+  activitySignals ActivitySignal[]
+  aiProductivityScores AIProductivityScore[]
+  chatMessages ChatMessage[]
+  // Leave & Payroll Relations
+  leaveRequests LeaveRequest[]
+  approvedLeaves LeaveRequest[] @relation("LeaveApprovals")
+  leaveBalances LeaveBalance[]
+  salaryStructures SalaryStructure[]
+  payslips      Payslip[]
+  approvedPayslips Payslip[] @relation("PayslipApprovals")
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  tokenHash  String
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime?
+  expiresAt  DateTime
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model LoginAuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  username  String
+  success   Boolean
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+// Attendance
+model AttendanceSession {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  state      String
+  startedAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  endedAt    DateTime?
+  events     AttendanceEvent[]
+  user       User      @relation(fields: [userId], references: [id])
+}
+
+model AttendanceEvent {
+  id        Int      @id @default(autoincrement())
+  sessionId Int
+  type      String
+  createdAt DateTime @default(now())
+  meta      Json?
+  session   AttendanceSession @relation(fields: [sessionId], references: [id])
+}
+
+// Projects & Tasks
+model Project {
+  id          Int              @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime         @default(now())
+  members     ProjectMember[]
+  tasks       Task[]
+}
+
+model ProjectMember {
+  id        Int     @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  role      String
+  project   Project @relation(fields: [projectId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+}
+
+model Task {
+  id          Int       @id @default(autoincrement())
+  projectId   Int
+  title       String
+  description String?
+  assigneeId  Int?
+  createdAt   DateTime  @default(now())
+  project     Project   @relation(fields: [projectId], references: [id])
+  assignee    User?     @relation(fields: [assigneeId], references: [id])
+  workSessions WorkSession[]
+}
+
+// Work sessions
+model WorkSession {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  taskId      Int?
+  startAt     DateTime @default(now())
+  pauseAt     DateTime?
+  resumeAt    DateTime?
+  endAt       DateTime?
+  productive  Boolean  @default(true)
+  reason      String?
+  user        User     @relation(fields: [userId], references: [id])
+  task        Task?    @relation(fields: [taskId], references: [id])
+}
+
+// AI signals & scores
+model ActivitySignal {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  type       String
+  payload    Json
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model AIProductivityScore {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  score      Int
+  reason     String
+  confidence Int
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+// Chat
+model ChatChannel {
+  id          Int       @id @default(autoincrement())
+  name        String
+  type        String
+  createdAt   DateTime  @default(now())
+  messages    ChatMessage[]
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  channelId  Int
+  fromUserId Int
+  message    String
+  meta       Json?
+  createdAt  DateTime @default(now())
+  channel    ChatChannel @relation(fields: [channelId], references: [id])
+  fromUser   User       @relation(fields: [fromUserId], references: [id])
+}
+
+model UserPresence {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  status    String
+  lastSeen  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// Timesheets
+model Timesheet {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  date      DateTime
+  status    String
+  draft     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  entries   TimesheetEntry[]
+}
+
+model TimesheetEntry {
+  id          Int     @id @default(autoincrement())
+  timesheetId Int
+  projectId   Int
+  taskId      Int
+  hours       Float
+  note        String?
+  timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
+}
+
+model Approval {
+  id          Int      @id @default(autoincrement())
+  timesheetId Int
+  approverId  Int
+  approved    Boolean
+  comment     String?
+  createdAt   DateTime @default(now())
+}
+
+// Leave Management
+model LeaveType {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  maxDaysPerYear Int
+  requiresApproval Boolean @default(true)
+  createdAt   DateTime  @default(now())
+  leaveRequests LeaveRequest[]
+  leaveBalances LeaveBalance[]
+}
+
+model LeaveBalance {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique
+  leaveTypeId Int
+  totalDays   Float
+  usedDays    Float     @default(0)
+  remainingDays Float
+  year        Int
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+  
+  @@unique([userId, leaveTypeId, year])
+}
+
+model LeaveRequest {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  leaveTypeId   Int
+  startDate     DateTime
+  endDate       DateTime
+  numberOfDays  Float
+  reason        String?
+  status        String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  approverNotes String?
+  approvedById  Int?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
+  approvedBy    User?     @relation("LeaveApprovals", fields: [approvedById], references: [id])
+}
+
+model LeaveApprovalWorkflow {
+  id            Int       @id @default(autoincrement())
+  leaveRequestId Int       @unique
+  currentApproverId Int
+  escalationLevel Int      @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Payroll Management
+model SalaryComponent {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  type        String    // BASIC, ALLOWANCE, DEDUCTION
+  description String?
+  isFixed     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  salaryStructures SalaryStructure[]
+  payslipLineItems PayslipLineItem[]
+}
+
+model SalaryStructure {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  componentId     Int
+  amount          Float
+  percentage      Float?    // For percentage-based components
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdAt       DateTime  @default(now())
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  component       SalaryComponent @relation(fields: [componentId], references: [id])
+  
+  @@unique([userId, componentId, effectiveFrom])
+}
+
+model Payslip {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  month             Int
+  year              Int
+  baseSalary        Float
+  totalEarnings     Float
+  totalDeductions   Float
+  netSalary         Float
+  workingDays       Int
+  attendedDays      Int
+  leaveTaken        Float     @default(0)
+  status            String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, PAID
+  generatedAt       DateTime  @default(now())
+  approvedById      Int?
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy        User?     @relation("PayslipApprovals", fields: [approvedById], references: [id])
+  lineItems         PayslipLineItem[]
+  deductions        PayslipDeduction[]
+  
+  @@unique([userId, month, year])
+}
+
+model PayslipLineItem {
+  id          Int       @id @default(autoincrement())
+  payslipId   Int
+  componentId Int
+  description String
+  amount      Float
+  quantity    Float     @default(1)
+  rate        Float?
+  
+  payslip     Payslip   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  component   SalaryComponent @relation(fields: [componentId], references: [id])
+}
+
+model PayslipDeduction {
+  id          Int       @id @default(autoincrement())
+  payslipId   Int
+  type        String    // INCOME_TAX, PF, ESI, OTHER
+  amount      Float
+  description String?
+  
+  payslip     Payslip   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+}
+
+model HolidayCalendar {
+  id          Int       @id @default(autoincrement())
+  name        String
+  date        DateTime
+  description String?
+  type        String    // NATIONAL, REGIONAL, COMPANY
+  year        Int
+  createdAt   DateTime  @default(now())
+}
+
+// Privacy & Audit
+model Consent {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String
+  grantedAt DateTime @default(now())
+}
+
+model DataRetentionPolicy {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  retentionDays Int
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  action    String
+  entity    String
+  entityId  Int?
+  data      Json?
+  createdAt DateTime @default(now())
+}

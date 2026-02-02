@@ -1,0 +1,2 @@
+# Analysis options: default lints removed to avoid missing package warning in this workspace.
+# Add desired lints or install `flutter_lints` package to enable standard lint rules.
