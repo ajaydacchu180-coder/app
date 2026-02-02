@@ -6,6 +6,15 @@
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
+
+# Keep Play Store Core classes (SplitInstall, DynamicDelivery)
+-keep class com.google.android.play.core.** { *; }
+-keepclassmembers class * {
+    com.google.android.play.core.splitinstall.SplitInstall** *;
+    com.google.android.play.core.splitcompat.** *;
+    com.google.android.play.core.tasks.** *;
+}
+
 # Keep okhttp/async code used by some plugins
 -dontwarn okhttp3.**
 -dontwarn okio.**
