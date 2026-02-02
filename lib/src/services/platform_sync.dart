@@ -21,8 +21,7 @@ class PlatformSync {
       // Only initialize on mobile platforms
       if (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS) {
-        await Workmanager()
-            .initialize(_callbackDispatcher, isInDebugMode: false);
+        await Workmanager().initialize(_callbackDispatcher);
         await Workmanager().registerPeriodicTask(
           _taskName,
           _taskName,
